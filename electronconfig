@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Electron Configuration Explorer</title>
+<style>
+:root{
+  --bg:#ffffff; --fg:#000000; --link:#0000cc; --rule:#808080;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#000000; --fg:#dddddd; --link:#6699ff; --rule:#777777; color-scheme:dark;}
+}
+:root[data-theme="dark"]{--bg:#000000; --fg:#dddddd; --link:#6699ff; --rule:#777777; color-scheme:dark;}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;padding:10px;background:var(--bg);color:var(--fg);font-family:"Times New Roman",Times,serif;font-size:16px;line-height:1.3}
+h1{text-align:center;font-size:2em;margin:10px 0 4px;font-weight:bold}
+h2{font-size:1.4em;margin:0 0 6px}
+p{margin:6px 0}
+hr{border:0;border-top:2px groove var(--rule);margin:10px 0}
+.wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:flex-start}
+.atombox{flex:0 1 420px;min-width:0;border:3px inset #808080;background:#000}
+.atombox svg{display:block;width:100%;height:auto}
+.info{flex:1 1 340px;min-width:0;max-width:560px}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid var(--rule);padding:4px 6px;text-align:left;vertical-align:top}
+th{width:38%;font-weight:bold}
+.controls td{vertical-align:middle}
+button{font:bold 16px Arial,Helvetica,sans-serif;background:#d4d0c8;color:#000;border:2px outset #f0f0f0;width:34px;height:28px;padding:0;cursor:pointer}
+button:active:not(:disabled){border-style:inset}
+button:disabled{color:#808080}
+button.wide{width:auto;padding:0 12px}
+#atom.paused .orbit{animation-play-state:paused}
+input[type=range]{width:100%;max-width:240px;vertical-align:middle}
+.val{display:inline-block;min-width:3.5em;text-align:center;font-weight:bold}
+.ring{fill:none;stroke:#999;stroke-width:1}
+.orbit{transform-origin:200px 200px;animation:spin var(--d) linear infinite;animation-direction:var(--dir)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.orbit{animation:none}}
+.e{fill:#ffff00}
+.nuc{fill:#cc0000}
+.nuc-t{fill:#fff;font:bold 12px Arial,Helvetica,sans-serif;text-anchor:middle}
+.note{font-style:italic;min-height:1.3em}
+sup{font-size:.7em;line-height:0}
+:focus-visible{outline:2px dotted var(--link);outline-offset:2px}
+</style>
+</head>
+<body>
+<h1>Electron Configuration Explorer</h1>
+<p style="text-align:center">Change the number of protons and the charge to see the Bohr model and electron configuration.</p>
+<hr>
+
+<div class="wrap">
+  <div class="atombox"><svg id="atom" viewBox="0 0 400 400" role="img" aria-label="Bohr model"></svg></div>
+
+  <div class="info" aria-live="polite">
+    <h2 id="name"></h2>
+
+    <table class="controls">
+      <tr>
+        <th>Protons</th>
+        <td>
+          <button id="pm" type="button" aria-label="Remove one proton">&minus;</button>
+          <input id="slider" type="range" min="1" max="118" step="1" value="6" aria-label="Number of protons">
+          <button id="pp" type="button" aria-label="Add one proton">+</button>
+        </td>
+      </tr>
+      <tr>
+        <th>Charge</th>
+        <td>
+          <button id="cm" type="button" aria-label="Decrease charge by one (add an electron)">&minus;</button>
+          <span class="val" id="chg"></span>
+          <button id="cp" type="button" aria-label="Increase charge by one (remove an electron)">+</button>
+        </td>
+      </tr>
+      <tr>
+        <th>Animation</th>
+        <td>
+          <button id="play" class="wide" type="button">Play</button>
+          <button id="pause" class="wide" type="button">Pause</button>
+        </td>
+      </tr>
+    </table>
+
+    <br>
+    <table>
+      <tr><th>Element</th><td id="n2"></td></tr>
+      <tr><th>Symbol</th><td id="sym"></td></tr>
+      <tr><th>Atomic number</th><td id="an"></td></tr>
+      <tr><th>Protons</th><td id="sp"></td></tr>
+      <tr><th>Electrons</th><td id="se"></td></tr>
+      <tr><th>Type</th><td id="type"></td></tr>
+      <tr><th>Valence electrons</th><td id="sv"></td></tr>
+      <tr><th>Shorthand configuration</th><td id="short"></td></tr>
+      <tr><th>Full configuration</th><td id="full"></td></tr>
+      <tr><th>Electrons per shell</th><td id="shells"></td></tr>
+    </table>
+    <p class="note" id="note"></p>
+  </div>
+</div>
+<hr>
+
+<script>
+const SYMS="H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og".split(" ");
+const NAMES="Hydrogen,Helium,Lithium,Beryllium,Boron,Carbon,Nitrogen,Oxygen,Fluorine,Neon,Sodium,Magnesium,Aluminum,Silicon,Phosphorus,Sulfur,Chlorine,Argon,Potassium,Calcium,Scandium,Titanium,Vanadium,Chromium,Manganese,Iron,Cobalt,Nickel,Copper,Zinc,Gallium,Germanium,Arsenic,Selenium,Bromine,Krypton,Rubidium,Strontium,Yttrium,Zirconium,Niobium,Molybdenum,Technetium,Ruthenium,Rhodium,Palladium,Silver,Cadmium,Indium,Tin,Antimony,Tellurium,Iodine,Xenon,Cesium,Barium,Lanthanum,Cerium,Praseodymium,Neodymium,Promethium,Samarium,Europium,Gadolinium,Terbium,Dysprosium,Holmium,Erbium,Thulium,Ytterbium,Lutetium,Hafnium,Tantalum,Tungsten,Rhenium,Osmium,Iridium,Platinum,Gold,Mercury,Thallium,Lead,Bismuth,Polonium,Astatine,Radon,Francium,Radium,Actinium,Thorium,Protactinium,Uranium,Neptunium,Plutonium,Americium,Curium,Berkelium,Californium,Einsteinium,Fermium,Mendelevium,Nobelium,Lawrencium,Rutherfordium,Dubnium,Seaborgium,Bohrium,Hassium,Meitnerium,Darmstadtium,Roentgenium,Copernicium,Nihonium,Flerovium,Moscovium,Livermorium,Tennessine,Oganesson".split(",");
+
+const ORDER="1s 2s 2p 3s 3p 4s 3d 4p 5s 4d 5p 6s 4f 5d 6p 7s 5f 6d 7p".split(" ");
+const CAP={s:2,p:6,d:10,f:14};
+const NOBLE=[[86,"Rn"],[54,"Xe"],[36,"Kr"],[18,"Ar"],[10,"Ne"],[2,"He"]];
+const EXC={24:{"4s":1,"3d":5},29:{"4s":1,"3d":10},41:{"5s":1,"4d":4},42:{"5s":1,"4d":5},44:{"5s":1,"4d":7},45:{"5s":1,"4d":8},46:{"5s":0,"4d":10},47:{"5s":1,"4d":10},57:{"4f":0,"5d":1},58:{"4f":1,"5d":1},64:{"4f":7,"5d":1},78:{"6s":1,"5d":9},79:{"6s":1,"5d":10},89:{"5f":0,"6d":1},90:{"5f":0,"6d":2},91:{"5f":2,"6d":1},92:{"5f":3,"6d":1},93:{"5f":4,"6d":1},96:{"5f":7,"6d":1},103:{"6d":0,"7p":1}};
+
+function config(z){
+  let rem=z; const c={};
+  for(const s of ORDER){ if(rem<=0)break; const k=Math.min(CAP[s[1]],rem); c[s]=k; rem-=k; }
+  const ex=EXC[z]; if(ex) Object.assign(c,ex);
+  return c;
+}
+const rank=k=>(+k[0])*10+"spdf".indexOf(k[1]);
+const sortKeys=c=>Object.keys(c).sort((a,b)=>rank(a)-rank(b));
+function ionConfig(z,q){
+  const c=config(z);
+  if(q>0){
+    for(let r=q;r>0;r--){
+      const k=Object.keys(c).filter(k=>c[k]>0).sort((a,b)=>rank(b)-rank(a))[0];
+      c[k]--;
+    }
+  } else if(q<0){
+    let r=-q;
+    for(const s of ORDER){ const add=Math.min(CAP[s[1]]-(c[s]||0),r); if(add>0){c[s]=(c[s]||0)+add; r-=add;} }
+  }
+  return c;
+}
+const fmt=(c,core)=>sortKeys(c).map(k=>[k,c[k]-((core&&core[k])||0)]).filter(x=>x[1]>0).map(x=>x[0]+"<sup>"+x[1]+"</sup>").join(" ");
+
+const $=id=>document.getElementById(id);
+const slider=$("slider");
+let z=6, q=0;
+const qMax=()=>Math.min(8,z-1), qMin=()=>Math.max(-8,z-118);
+
+function draw(c){
+  const shells=[];
+  for(const k in c){ const n=+k[0]; shells[n-1]=(shells[n-1]||0)+c[k]; }
+  let s="";
+  shells.forEach((cnt,i)=>{
+    if(!cnt) return;
+    const n=i+1, r=38+i*23;
+    s+=`<circle class="ring" cx="200" cy="200" r="${r}"/>`;
+    s+=`<g class="orbit" style="--d:${14+n*7}s;--dir:${n%2?"normal":"reverse"}">`;
+    for(let j=0;j<cnt;j++){
+      const a=2*Math.PI*j/cnt+n*0.6;
+      s+=`<circle class="e" cx="${(200+r*Math.cos(a)).toFixed(1)}" cy="${(200+r*Math.sin(a)).toFixed(1)}" r="4"/>`;
+    }
+    s+="</g>";
+  });
+  s+=`<circle class="nuc" cx="200" cy="200" r="24"/><text class="nuc-t" x="200" y="204">${z}p+</text>`;
+  $("atom").innerHTML=s;
+  return shells.filter(Boolean);
+}
+
+function update(){
+  q=Math.max(qMin(),Math.min(qMax(),q));
+  const e=z-q, c=ionConfig(z,q), shells=draw(c);
+  let short=fmt(c);
+  for(const [nz,sym] of NOBLE){
+    if(!(q===0?nz<z:nz<=e)) continue;
+    const core=config(nz);
+    if(Object.keys(core).every(k=>(c[k]||0)>=core[k])){ short=`[${sym}] `+fmt(c,core); break; }
+  }
+  const qs=q===0?"0":(q>0?"+":"\u2212")+Math.abs(q);
+  const sym=SYMS[z-1]+(q===0?"":`<sup>${Math.abs(q)===1?"":Math.abs(q)}${q>0?"+":"\u2212"}</sup>`);
+  $("name").textContent=NAMES[z-1]+(q===0?"":q>0?" cation":" anion");
+  $("n2").textContent=NAMES[z-1];
+  $("sym").innerHTML=sym;
+  $("an").textContent=z; $("sp").textContent=z; $("se").textContent=e;
+  $("type").textContent=q===0?"Neutral atom":(q>0?`Cation (lost ${q} electron${q>1?"s":""})`:`Anion (gained ${-q} electron${q<-1?"s":""})`);
+  $("sv").textContent=shells[shells.length-1];
+  $("short").innerHTML=short; $("full").innerHTML=fmt(c); $("shells").textContent=shells.join(", ");
+  $("chg").textContent=qs;
+  $("note").textContent=q>0?"Cations lose electrons from the outermost shell first.":q<0?"Anions gain electrons in the next open subshells.":(EXC[z]?"This element is an exception to the usual filling order.":(z>103?"Configurations beyond Z = 103 are extrapolated from the filling order.":""));
+  slider.value=z;
+  $("pm").disabled=z<=1; $("pp").disabled=z>=118;
+  $("cm").disabled=q<=qMin(); $("cp").disabled=q>=qMax();
+}
+slider.addEventListener("input",()=>{z=+slider.value;update();});
+$("pm").addEventListener("click",()=>{if(z>1){z--;update();}});
+$("pp").addEventListener("click",()=>{if(z<118){z++;update();}});
+$("cm").addEventListener("click",()=>{q--;update();});
+$("cp").addEventListener("click",()=>{q++;update();});
+function setPlaying(on){
+  $("atom").classList.toggle("paused",!on);
+  $("play").disabled=on; $("pause").disabled=!on;
+}
+$("play").addEventListener("click",()=>setPlaying(true));
+$("pause").addEventListener("click",()=>setPlaying(false));
+setPlaying(true);
+update();
+</script>
+</body>
+</html>
